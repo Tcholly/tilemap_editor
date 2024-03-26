@@ -17,7 +17,7 @@
 		(da).items[(da).size++] = value;                                             \
 	} while (0)
 
-#define da_remove_at(da, index) \
+#define da_remove_at(da, index)                              \
 	do                                                       \
 	{                                                        \
 		if ((index) >= 0 && (index) < (da).size)             \
@@ -25,4 +25,14 @@
 			(da).items[(index)] = (da).items[(da).size - 1]; \
 			(da).size--;                                     \
 		}                                                    \
+	} while (0)
+
+#define da_remove_at_keep_order(da, index)                                                                                    \
+	do                                                                                                                        \
+	{                                                                                                                         \
+		if ((index) >= 0 && (index) < (da).size)                                                                              \
+		{                                                                                                                     \
+			memmove((da).items + index, (da).items + index + 1, ((da).size - index - 1) * sizeof((da).items[0])); \
+			(da).size--;                                                                                                      \
+		}                                                                                                                     \
 	} while (0)

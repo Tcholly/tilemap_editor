@@ -61,15 +61,86 @@ void draw_viewport(CoreData* data)
 	draw_tilemap(&data->tilemap);
 	EndMode2D();
 
-	if (data->current_texture >= 0 && data->current_texture < data->tilemap.textures.size)
+	EndTextureMode();
+}
+
+void viewport_window(CoreData* data)
+{
+	igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding, (ImVec2){0, 0});
+	igBegin("Viewport", NULL, 0);
+
+	ImVec2 viewport_size_min;
+	ImVec2 viewport_size_max;
+	ImVec2 viewport_pos;
+	igGetWindowContentRegionMin(&viewport_size_min);
+	igGetWindowContentRegionMax(&viewport_size_max);
+	igGetWindowPos(&viewport_pos);
+	data->viewport_bounds.x = viewport_pos.x + viewport_size_min.x;
+	data->viewport_bounds.y = viewport_pos.y + viewport_size_min.y;
+	data->viewport_bounds.width  = viewport_size_max.x - viewport_size_min.x;
+	data->viewport_bounds.height = viewport_size_max.y - viewport_size_min.y;
+
+	if ((int)data->viewport_bounds.width != data->viewport.texture.width || (int)data->viewport_bounds.height != data->viewport.texture.height)
 	{
-		Texture2D texture = data->tilemap.textures.items[data->current_texture];
-    	Rectangle source = { 0.0f, 0.0f, (float)texture.width, (float)texture.height };
-		Rectangle dest = {50.0f, 50.0f, 100.0f, 100.0f};
-		DrawTexturePro(texture, source, dest, Vector2Zero(), 0.0f, (Color){255, 255, 255, 150});
+		UnloadRenderTexture(data->viewport);
+		data->viewport = LoadRenderTexture(data->viewport_bounds.width, data->viewport_bounds.height);
 	}
 
-	EndTextureMode();
+	// Render viewport
+	draw_viewport(data);
+	rlImGuiImageRenderTexture(&data->viewport);
+
+	igEnd();
+	igPopStyleVar(1);
+}
+
+void tile_selector_window(CoreData* data)
+{
+	igBegin("Tile select", NULL, ImGuiWindowFlags_None);
+
+	ImVec2 window_size;
+	igGetWindowSize(&window_size);
+
+	ImVec2 item_size = {70.0f, 70.0f};
+	float padding = 10.0f;
+	ImVec2 spacing = igGetStyle()->ItemSpacing;
+
+	int items_per_row = window_size.x / (item_size.x + spacing.x + 2 * igGetStyle()->CellPadding.x);
+	if (items_per_row <= 0)
+		items_per_row = 1;
+
+	int to_remove = -1;
+	for (size_t i = 0; i < data->tilemap.textures.size; i++)
+	{
+		int item_idx = i % items_per_row;
+		if (item_idx != 0)
+			igSameLine(0, -1);
+
+
+		bool is_selected = i == data->current_texture;
+		if (is_selected)
+			igPushStyleColor_Vec4(ImGuiCol_Button, *igGetStyleColorVec4(ImGuiCol_ButtonActive));
+
+		if (rlImGuiImageButtonSize(TextFormat("Tile %zu", i), &data->tilemap.textures.items[i], item_size))
+			data->current_texture = i;
+
+		// Context menu
+		if (igBeginPopupContextItem(TextFormat("Tile %zu context", i), ImGuiPopupFlags_MouseButtonRight))
+		{
+			if (igMenuItem_Bool("Delete", NULL, false, true))
+				to_remove = i;
+
+			igEndPopup();
+		}
+
+		if (is_selected)
+			igPopStyleColor(1);
+	}
+
+	igEnd(); // Tile selector
+
+	if (to_remove >= 0 && to_remove < data->tilemap.textures.size)
+		remove_texture(&data->tilemap, to_remove);
 }
 
 int main(void)
@@ -113,10 +184,13 @@ int main(void)
 		data.camera.target.y += movement.y * CAMERA_SPEED * dt;
 
 		// TODO: set zoom position to mouse
-		float mouse_wheel = GetMouseWheelMove();
-		data.camera.zoom += mouse_wheel;
-		if (data.camera.zoom <= 1.0f)
-			data.camera.zoom = 1.0f;
+		if (mouse_in_viewport)
+		{
+			float mouse_wheel = GetMouseWheelMove();
+			data.camera.zoom += mouse_wheel;
+			if (data.camera.zoom <= 1.0f)
+				data.camera.zoom = 1.0f;
+		}
 
 		if (mouse_in_viewport && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && data.tilemap.textures.size > 0)
 		{
@@ -184,53 +258,26 @@ int main(void)
 		}
 
 
-		// Render viewport
-
 		BeginDrawing();
 		ClearBackground(WHITE);
 
 		// start ImGui Conent
 		rlImGuiBegin();
 
+		// Dockspace
 		igDockSpaceOverViewport(NULL, ImGuiDockNodeFlags_None, NULL);
 
 		// show ImGui Content
-		igShowDemoWindow(NULL);
+		// igShowDemoWindow(NULL);
 
 		// Viewport
-		igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding, (ImVec2){0, 0});
-		igBegin("Viewport", NULL, 0);
+		viewport_window(&data);
 
-		// Yellow is content region min/max
-		
-		ImVec2 viewport_size_min;
-		ImVec2 viewport_size_max;
-		ImVec2 viewport_pos;
-		igGetWindowContentRegionMin(&viewport_size_min);
-		igGetWindowContentRegionMax(&viewport_size_max);
-		igGetWindowPos(&viewport_pos);
-		data.viewport_bounds.x = viewport_pos.x + viewport_size_min.x;
-		data.viewport_bounds.y = viewport_pos.y + viewport_size_min.y;
-		data.viewport_bounds.width  = viewport_size_max.x - viewport_size_min.x;
-		data.viewport_bounds.height = viewport_size_max.y - viewport_size_min.y;
-
-		if ((int)data.viewport_bounds.width != data.viewport.texture.width || (int)data.viewport_bounds.height != data.viewport.texture.height)
-		{
-			UnloadRenderTexture(data.viewport);
-			data.viewport = LoadRenderTexture(data.viewport_bounds.width, data.viewport_bounds.height);
-		}
-
-		draw_viewport(&data);
-		rlImGuiImageRenderTexture(&data.viewport);
-
-		igEnd();
-		igPopStyleVar(1);
+		// Tile selector
+		tile_selector_window(&data);
 
 		// end ImGui Content
 		rlImGuiEnd();
-
-		DrawRectangleLinesEx(data.viewport_bounds, 2.0f, RED);
-
 
 		EndDrawing();
 	}

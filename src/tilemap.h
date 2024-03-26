@@ -60,6 +60,9 @@ typedef struct
 
 void add_tileset(Tilemap* tilemap, const char* filepath, int width, int height);
 
+// This function will remove all tiles that use the given texture
+void remove_texture(Tilemap* tilemap, size_t texture_index);
+
 void draw_tilemap(const Tilemap* tilemap);
 
 void unload_tileset(Tilemap* tilemap);

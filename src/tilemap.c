@@ -99,6 +99,55 @@ defer_return:
 	UnloadImage(tileset);
 }
 
+static void remove_texture_from_layer(Layer* layer, size_t texture_index)
+{
+	if (!layer)
+		return;
+
+	// Normal tiles
+	for (size_t i = 0; i < layer->tiles.size; i++)
+	{
+		Tile* tile = &layer->tiles.items[i];
+		if (tile->texture_index == texture_index)
+		{
+			da_remove_at(layer->tiles, i);
+			i--;
+		}
+		else if (tile->texture_index > texture_index)
+			tile->texture_index--;
+	}
+
+	// Static tiles
+	for (size_t i = 0; i < layer->static_tiles.size; i++)
+	{
+		Tile* tile = &layer->static_tiles.items[i];
+		if (tile->texture_index == texture_index)
+		{
+			da_remove_at(layer->static_tiles, i);
+			i--;
+		}
+		else if (tile->texture_index > texture_index)
+			tile->texture_index--;
+	}
+}
+
+void remove_texture(Tilemap* tilemap, size_t texture_index)
+{
+	if (!tilemap)
+		return;
+
+	if (texture_index >= tilemap->textures.size)
+		return;
+
+	remove_texture_from_layer(&tilemap->main_layer, texture_index);
+
+	for (size_t i = 0; i < tilemap->layers.size; i++)
+		remove_texture_from_layer(&tilemap->layers.items[i], texture_index);
+
+	UnloadTexture(tilemap->textures.items[texture_index]);
+	da_remove_at_keep_order(tilemap->textures, texture_index);
+}
+
 void unload_tileset(Tilemap* tilemap)
 {
 	for (size_t i = 0; i < tilemap->textures.size; i++)
