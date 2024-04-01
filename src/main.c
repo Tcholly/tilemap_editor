@@ -1,9 +1,11 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <raylib.h>
 #include <raymath.h>
 
 #include "tilemap.h"
 #include "utils.h"
+#include "file_picker.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "external/cimgui.h"
@@ -18,6 +20,8 @@ typedef struct
 	Camera2D camera;
 	Tilemap tilemap;
 	size_t current_texture;
+
+	char* tilemap_filepath;
 
 	Rectangle viewport_bounds;
 	RenderTexture2D viewport;
@@ -62,6 +66,11 @@ void draw_viewport(CoreData* data)
 	EndMode2D();
 
 	EndTextureMode();
+}
+
+void set_imgui_style(void)
+{
+	ImGuiStyle* style = igGetStyle();
 }
 
 void viewport_window(CoreData* data)
@@ -143,6 +152,52 @@ void tile_selector_window(CoreData* data)
 		remove_texture(&data->tilemap, to_remove);
 }
 
+void new_tilemap(CoreData* data)
+{
+	unload_tilemap(&data->tilemap);
+	if (data->tilemap_filepath)
+		free(data->tilemap_filepath);
+
+	data->tilemap_filepath = NULL;
+	data->camera.zoom = 100.0f;
+	data->camera.target = Vector2Zero(); 
+	data->current_texture = 0;
+}
+
+void save_tilemap_as(CoreData* data)
+{
+	char* file = open_dialog(false);
+	if (file)
+	{
+		save_tilemap(&data->tilemap, file);
+		if (data->tilemap_filepath)
+			free(data->tilemap_filepath);
+		data->tilemap_filepath = file;
+	}
+}
+
+void save_tilemap_to_file(CoreData* data)
+{
+	if (data->tilemap_filepath)
+		save_tilemap(&data->tilemap, data->tilemap_filepath);
+	else
+		save_tilemap_as(data);
+}
+
+void open_tilemap_from_file(CoreData* data)
+{
+	char* file = open_dialog(false);
+	if (file)
+	{
+		unload_tilemap(&data->tilemap);
+		data->tilemap = load_tilemap(file);
+
+		if (data->tilemap_filepath)
+			free(data->tilemap_filepath);
+		data->tilemap_filepath = file;
+	}
+}
+
 int main(void)
 {
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -153,18 +208,22 @@ int main(void)
 	ImGuiIO* io = igGetIO();
 	io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	set_imgui_style();
 
 	CoreData data =
 	{
-		.camera.zoom = 100.0f,
 		.viewport = LoadRenderTexture(800, 480),
 	};
+
+	new_tilemap(&data);
 
 	add_tileset(&data.tilemap, "assets/Mossy - TileSet.png", 7, 7);
 
 	while (!WindowShouldClose())
 	{
 		bool mouse_in_viewport = CheckCollisionPointRec(GetMousePosition(), data.viewport_bounds);
+		bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+		bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
 		float dt = GetFrameTime();
 
@@ -175,7 +234,7 @@ int main(void)
 		if (IsKeyDown(KEY_A))
 			movement.x -= 1.0f;
 
-		if (IsKeyDown(KEY_S))
+		if (IsKeyDown(KEY_S) && !control)
 			movement.y += 1.0f;
 		if (IsKeyDown(KEY_W))
 			movement.y -= 1.0f;
@@ -183,9 +242,9 @@ int main(void)
 		data.camera.target.x += movement.x * CAMERA_SPEED * dt;
 		data.camera.target.y += movement.y * CAMERA_SPEED * dt;
 
-		// TODO: set zoom position to mouse
 		if (mouse_in_viewport)
 		{
+			// TODO: set zoom position to mouse
 			float mouse_wheel = GetMouseWheelMove();
 			data.camera.zoom += mouse_wheel;
 			if (data.camera.zoom <= 1.0f)
@@ -248,21 +307,44 @@ int main(void)
 		else
 			data.current_texture = 0;
 
-		bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+		if (IsKeyPressed(KEY_N) && control)
+			new_tilemap(&data);
 		if (IsKeyPressed(KEY_S) && control)
-			save_tilemap(&data.tilemap, "out.dat");
-		if (IsKeyPressed(KEY_L) && control)
 		{
-			unload_tilemap(&data.tilemap);
-			data.tilemap = load_tilemap("out.dat");
+			if (shift)
+				save_tilemap_as(&data);
+			else
+				save_tilemap_to_file(&data);
 		}
-
+		if (IsKeyPressed(KEY_O) && control)
+			open_tilemap_from_file(&data);
 
 		BeginDrawing();
 		ClearBackground(WHITE);
 
 		// start ImGui Conent
 		rlImGuiBegin();
+
+
+		// Menu bar
+		if (igBeginMainMenuBar())
+		{
+			if (igBeginMenu("File", true))
+			{
+				if (igMenuItem_Bool("New", "ctrl+n", false, true))
+					new_tilemap(&data);
+				if (igMenuItem_Bool("Save", "ctrl+s", false, true))
+					save_tilemap_to_file(&data);
+				if (igMenuItem_Bool("Save as", "ctrl+shift+s", false, true))
+					save_tilemap_as(&data);
+				if (igMenuItem_Bool("Open", "ctrl+o", false, true))
+					open_tilemap_from_file(&data);
+
+				igEndMenu();
+			}
+
+			igEndMainMenuBar();
+		}
 
 		// Dockspace
 		igDockSpaceOverViewport(NULL, ImGuiDockNodeFlags_None, NULL);
