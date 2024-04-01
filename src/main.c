@@ -6,8 +6,8 @@
 #include "utils.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "cimgui.h"
-#include "rlImGui.h"
+#include "external/cimgui.h"
+#include "external/rlImGui.h"
 
 
 #define CAMERA_SPEED 30
