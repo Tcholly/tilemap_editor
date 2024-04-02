@@ -14,7 +14,7 @@
 
 
 #define IMGUI_BUFFER_SIZE 512
-#define CAMERA_SPEED 30
+#define CAMERA_SPEED 600
 #define CAMERA_ZOOM_FACTOR 1.5f
 
 typedef struct
@@ -303,9 +303,8 @@ int main(void)
 		if (IsKeyDown(KEY_W))
 			movement.y -= 1.0f;
 
-		// TODO: compute camera speed relative to zoom
-		data.camera.target.x += movement.x * CAMERA_SPEED * dt;
-		data.camera.target.y += movement.y * CAMERA_SPEED * dt;
+		data.camera.target.x += movement.x * CAMERA_SPEED * dt / data.camera.zoom;
+		data.camera.target.y += movement.y * CAMERA_SPEED * dt / data.camera.zoom;
 
 		if (mouse_in_viewport)
 		{
