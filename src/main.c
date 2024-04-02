@@ -15,7 +15,7 @@
 
 #define IMGUI_BUFFER_SIZE 512
 #define CAMERA_SPEED 30
-
+#define CAMERA_ZOOM_FACTOR 1.5f
 
 typedef struct
 {
@@ -32,17 +32,28 @@ typedef struct
 	bool show_add_tileset_popup;
 } CoreData;
 
+Vector2 get_mouse_pos_on_viewport(CoreData* data)
+{
+	Vector2 result = GetMousePosition();
+
+	result.x -= data->viewport_bounds.x;
+	result.y -= data->viewport_bounds.y;
+
+	return result;
+}
+
+Vector2 get_mouse_pos_in_2d_world(CoreData* data)
+{
+	Vector2 result = get_mouse_pos_on_viewport(data);
+	return GetScreenToWorld2D(result, data->camera);
+}
+
 int get_tile_index_collides_with_mouse(CoreData* data, const Layer* layer)
 {
 	if (!layer || !data)
 		return -1;
 
-	Vector2 mouse_pos = GetMousePosition();
-
-	mouse_pos.x -= data->viewport_bounds.x;
-	mouse_pos.y -= data->viewport_bounds.y;
-	
-	mouse_pos = GetScreenToWorld2D(mouse_pos, data->camera);
+	Vector2 mouse_pos = get_mouse_pos_in_2d_world(data);
 
 	for (size_t i = 0; i < layer->tiles.size; i++)
 	{
@@ -292,16 +303,25 @@ int main(void)
 		if (IsKeyDown(KEY_W))
 			movement.y -= 1.0f;
 
+		// TODO: compute camera speed relative to zoom
 		data.camera.target.x += movement.x * CAMERA_SPEED * dt;
 		data.camera.target.y += movement.y * CAMERA_SPEED * dt;
 
 		if (mouse_in_viewport)
 		{
-			// TODO: set zoom position to mouse
 			float mouse_wheel = GetMouseWheelMove();
-			data.camera.zoom += mouse_wheel;
-			if (data.camera.zoom <= 1.0f)
-				data.camera.zoom = 1.0f;
+			if (mouse_wheel != 0)
+			{
+				Vector2 mouse_pos = get_mouse_pos_on_viewport(&data);
+				Vector2 mouse_pos_2d = GetScreenToWorld2D(mouse_pos, data.camera);
+
+				data.camera.offset = mouse_pos;
+				data.camera.target = mouse_pos_2d;
+
+				data.camera.zoom += mouse_wheel * data.camera.zoom * dt * CAMERA_ZOOM_FACTOR;
+				if (data.camera.zoom <= 1.0f)
+					data.camera.zoom = 1.0f;
+			}
 		}
 
 		if (mouse_in_viewport && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && data.tilemap.textures.size > 0)
@@ -318,10 +338,7 @@ int main(void)
 
 			if (collision_index < 0)
 			{
-				Vector2 mouse_pos = GetMousePosition();
-				mouse_pos.x -= data.viewport_bounds.x;
-				mouse_pos.y -= data.viewport_bounds.y;
-				mouse_pos = GetScreenToWorld2D(mouse_pos, data.camera);
+				Vector2 mouse_pos = get_mouse_pos_in_2d_world(&data); 
 				Tile tile =
 				{
 					.tilemap_index = { mouse_pos.x, mouse_pos.y },
