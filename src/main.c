@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <raylib.h>
 #include <raymath.h>
+#include <string.h>
 
 #include "tilemap.h"
 #include "utils.h"
@@ -12,6 +13,7 @@
 #include "external/rlImGui.h"
 
 
+#define IMGUI_BUFFER_SIZE 512
 #define CAMERA_SPEED 30
 
 
@@ -25,6 +27,9 @@ typedef struct
 
 	Rectangle viewport_bounds;
 	RenderTexture2D viewport;
+
+	// Imgui data
+	bool show_add_tileset_popup;
 } CoreData;
 
 int get_tile_index_collides_with_mouse(CoreData* data, const Layer* layer)
@@ -146,6 +151,54 @@ void tile_selector_window(CoreData* data)
 			igPopStyleColor(1);
 	}
 
+	// Button for adding tilesets
+	igSpacing();
+	igSeparator();
+	igSpacing();
+
+	static char file_buffer[IMGUI_BUFFER_SIZE];
+	if (igButtonEx("Add tileset", (ImVec2){window_size.x - spacing.x * 2.0f, 20.0f}, ImGuiButtonFlags_None) && !data->show_add_tileset_popup)
+	{
+		data->show_add_tileset_popup = true;
+		file_buffer[0] = '\0';
+	}
+
+	// Add tileset popup window
+	// TODO: add filter
+	if (data->show_add_tileset_popup)
+	{
+		ImGuiIO* io = igGetIO();
+		igSetNextWindowPos((ImVec2){io->DisplaySize.x * 0.5f, io->DisplaySize.y * 0.5f}, ImGuiCond_Always, (ImVec2){0.5f, 0.5f});
+		igBegin("Select tileset", &data->show_add_tileset_popup, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+		
+		if (igButton("...", (ImVec2){0.0f, 0.0f}))
+		{
+			char* file = open_dialog(false);
+			if (file)
+				strncpy(file_buffer, file, IMGUI_BUFFER_SIZE);
+		}
+		igSameLine(0, -1);
+		igInputText("Filepath", file_buffer, IMGUI_BUFFER_SIZE, ImGuiInputTextFlags_None, NULL, NULL);
+
+		static int tiles_number[2];
+		igInputInt2("Number of tiles", tiles_number, ImGuiInputTextFlags_None);
+		
+		if (igButton("Cancel", (ImVec2){0.0f, 0.0f}))
+			data->show_add_tileset_popup = false;
+
+		ImVec2 window_max;
+		igGetWindowContentRegionMax(&window_max);
+		igSameLine(window_max.x - 36.0f, -1);
+		
+		if (igButton("Done", (ImVec2){0.0f, 0.0f}))
+		{
+			add_tileset(&data->tilemap, file_buffer, tiles_number[0], tiles_number[1]);
+			data->show_add_tileset_popup = false;
+		}
+
+		igEnd();
+	}
+
 	igEnd(); // Tile selector
 
 	if (to_remove >= 0 && to_remove < data->tilemap.textures.size)
@@ -221,7 +274,7 @@ int main(void)
 
 	while (!WindowShouldClose())
 	{
-		bool mouse_in_viewport = CheckCollisionPointRec(GetMousePosition(), data.viewport_bounds);
+		bool mouse_in_viewport = CheckCollisionPointRec(GetMousePosition(), data.viewport_bounds) && !data.show_add_tileset_popup;
 		bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 		bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
@@ -292,32 +345,40 @@ int main(void)
 				da_remove_at(data.tilemap.main_layer.tiles, collision_index);
 		}
 
-		if (IsKeyPressedRepeat(KEY_LEFT) || IsKeyPressed(KEY_LEFT))
+		bool allow_input = !data.show_add_tileset_popup;
+		if (allow_input)
 		{
-			if (data.current_texture == 0)
-				data.current_texture = data.tilemap.textures.size - 1;
-			else
-				data.current_texture--;
+			if (IsKeyPressedRepeat(KEY_LEFT) || IsKeyPressed(KEY_LEFT))
+			{
+				if (data.current_texture == 0)
+					data.current_texture = data.tilemap.textures.size - 1;
+				else
+					data.current_texture--;
+			}
+			if (IsKeyPressedRepeat(KEY_RIGHT) || IsKeyPressed(KEY_RIGHT))
+				data.current_texture++;
 		}
-		if (IsKeyPressedRepeat(KEY_RIGHT) || IsKeyPressed(KEY_RIGHT))
-			data.current_texture++;
 
 		if (data.tilemap.textures.size > 0)
 			data.current_texture %= data.tilemap.textures.size;
 		else
 			data.current_texture = 0;
 
-		if (IsKeyPressed(KEY_N) && control)
-			new_tilemap(&data);
-		if (IsKeyPressed(KEY_S) && control)
+		// Shortcuts
+		if (allow_input && control)
 		{
-			if (shift)
-				save_tilemap_as(&data);
-			else
-				save_tilemap_to_file(&data);
+			if (IsKeyPressed(KEY_N))
+				new_tilemap(&data);
+			if (IsKeyPressed(KEY_S))
+			{
+				if (shift)
+					save_tilemap_as(&data);
+				else
+					save_tilemap_to_file(&data);
+			}
+			if (IsKeyPressed(KEY_O))
+				open_tilemap_from_file(&data);
 		}
-		if (IsKeyPressed(KEY_O) && control)
-			open_tilemap_from_file(&data);
 
 		BeginDrawing();
 		ClearBackground(WHITE);

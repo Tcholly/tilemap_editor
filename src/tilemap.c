@@ -64,10 +64,22 @@ void draw_tilemap(const Tilemap* tilemap)
 void add_tileset(Tilemap* tilemap, const char* filepath, int width, int height)
 {
 	Image tileset = LoadImage(filepath);
+
+	if (!IsImageReady(tileset))
+	{
+		fprintf(stderr, "ERROR: Failed to load image: %s\n", filepath);
+		return;
+	}
 	
+	if (width <= 0 || height <= 0)
+	{
+		fprintf(stderr, "ERROR: tileset [%s] is not divisible in %dx%d tiles\n", filepath, width, height);
+		goto defer_return;
+	}
+
 	if (tileset.width % width != 0 || tileset.height % height != 0)
 	{
-		fprintf(stderr, "ERROR: tileset [%s] is not divisible in %dx%d tiles", filepath, width, height);
+		fprintf(stderr, "ERROR: tileset [%s] is not divisible in %dx%d tiles\n", filepath, width, height);
 		goto defer_return;
 	}
 

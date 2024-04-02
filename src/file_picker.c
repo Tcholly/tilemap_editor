@@ -6,20 +6,29 @@
 
 #define MAX_PATH_LEN 1024
 
-static void trim_right(char buffer[])
+static void trim_right(char* buffer)
 {
+	if (!buffer)
+		return;
+
 	int len = strlen(buffer);
+	if (len < 1)
+		return;
 
 	int cursor = len - 1;
-	const char whitespace[] = " \n\r\t";
+	const char whitespace[] = " \n\r\t\v\f";
+	int whitespace_len = strlen(whitespace);
 	while (cursor >= 0)
 	{
 		char ch = buffer[cursor];
 		bool is_whitespace = false;
-		for (int i = 0; i < strlen(whitespace); i++)
+		for (int i = 0; i < whitespace_len; i++)
 		{
 			if (ch == whitespace[i])
+			{
 				is_whitespace = true;
+				break;
+			}
 		}
 
 		if (is_whitespace)
@@ -64,7 +73,7 @@ char* open_dialog(bool save_mode)
 	}
 
 	char buffer[MAX_PATH_LEN];
-	char* ok = fgets(buffer, 1024, zenity);
+	char* ok = fgets(buffer, MAX_PATH_LEN, zenity);
 	pclose(zenity);
 
 	// Canceled
